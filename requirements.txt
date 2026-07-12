@@ -1,5 +1,4 @@
 fastapi
-uvicorn
 google-genai
 pandas
 pydantic
