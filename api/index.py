@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import base64
 import pandas as pd
@@ -56,16 +57,25 @@ def _detect_mime(audio_bytes: bytes) -> str:
 
 
 PROMPT = """Listen to this audio carefully - it is someone reading aloud a small
-structured dataset (a table), possibly in Korean, row by row.
+structured dataset (a table), possibly in Korean, row by row. Each row repeats
+the SAME small set of attribute names (e.g. "height", "weight") followed by a
+value for that row.
 
 Reconstruct the exact table as JSON:
-- "columns": the list of column names in the order they were spoken.
+- "columns": the list of DISTINCT attribute names that repeat across every
+  row, in the order first spoken. This is almost always a SMALL number (often
+  just 1-3) - do NOT create a new column for a value, a filler word, or a
+  one-off phrase. A column name should be something you hear repeated with a
+  new value on every single row, not a word that appears once.
 - "column_types": whether each column is "numeric" or "categorical", in the
   same order as columns.
-- "rows": the list of rows, each row being a list of string values in the
-  same column order. Convert any numbers spoken as words into plain numerals.
+- "rows": the list of rows, each row being a list of values in the same
+  column order (one entry per column, nothing extra). Convert any numbers
+  spoken as words into plain numerals. The number of rows should match how
+  many times the full set of attributes was repeated in the audio.
 
-Be precise - do not guess or invent values not present in the audio."""
+Be precise - do not guess or invent values not present in the audio, and do
+not let stray/filler words become extra columns or extra row entries."""
 
 
 def _reconstruct_table(audio_bytes: bytes) -> dict:
@@ -85,7 +95,9 @@ def _reconstruct_table(audio_bytes: bytes) -> dict:
                     temperature=0,
                 ),
             )
-            return json.loads(response.text)
+            table = json.loads(response.text)
+            print(f"[q6-debug] model={model_name} reconstructed_table={json.dumps(table)}", file=sys.stderr, flush=True)
+            return table
         except Exception as e:
             last_error = e
             if "not found" in str(e).lower() or "unsupported" in str(e).lower():
